@@ -53,6 +53,7 @@ class GenericSpecializer : public SILFunctionTransform {
 
 } // end anonymous namespace
 
+#include "swift/Demangling/Demangle.h"
 bool GenericSpecializer::specializeAppliesInFunction(SILFunction &F) {
   SILOptFunctionBuilder FunctionBuilder(*this);
   DeadInstructionSet DeadApplies;
@@ -64,7 +65,22 @@ bool GenericSpecializer::specializeAppliesInFunction(SILFunction &F) {
     // Collect the applies for this block in reverse order so that we
     // can pop them off the end of our vector and process them in
     // forward order.
-    for (auto It = BB.rbegin(), End = BB.rend(); It != End; ++It) {
+
+      // これの場合でのコメント。
+//      sil_scope 1 { loc "generics.swift":6:6 parent @$s8generics1gySbs6UInt16VF : $@convention(thin) (UInt16) -> Bool }
+//      sil_scope 2 { loc "generics.swift":6:29 parent 1 }
+//      // %0                                             // users: %3, %1
+//      bb0(%0 : $UInt16):
+//        debug_value %0 : $UInt16, let, name "v", argno 1 // id: %1
+//        %2 = alloc_stack $UInt16                        // users: %3, %6, %5
+//        store %0 to %2 : $*UInt16                       // id: %3
+//        // function_ref f<A>(_:)
+//        %4 = function_ref @$s8generics1fySbxSQRzlF : $@convention(thin) <τ_0_0 where τ_0_0 : Equatable> (@in_guaranteed τ_0_0) -> Bool // user: %5
+//        %5 = apply %4<UInt16>(%2) : $@convention(thin) <τ_0_0 where τ_0_0 : Equatable> (@in_guaranteed τ_0_0) -> Bool // user: %7
+//        dealloc_stack %2 : $*UInt16                     // id: %6
+//        return %5 : $Bool                               // id: %7
+
+    for (auto It = BB.rbegin(), End = BB.rend(); It != End; ++It) {  // あとでイテレータ破壊を避けるために逆順に収集
       auto *I = &*It;
 
       // Skip non-apply instructions, apply instructions with no
@@ -87,7 +103,8 @@ bool GenericSpecializer::specializeAppliesInFunction(SILFunction &F) {
         });
         continue;
       }
-
+        // 1st: 関数呼び出し（apply）のうち、呼び出し先が参照可能なものに関して収集
+        //  %5 = apply %4<UInt16>(%2) : $@convention(thin) <τ_0_0 where τ_0_0 : Equatable> (@in_guaranteed τ_0_0) -> Bool // user: %7od
       Applies.insert(Apply.getInstruction());
     }
 
@@ -96,14 +113,18 @@ bool GenericSpecializer::specializeAppliesInFunction(SILFunction &F) {
     // in the process of doing so). We pop from the end of the list to
     // avoid tricky iterator invalidation issues.
     while (!Applies.empty()) {
+        // 逆順で収集したものを末尾から取り出す　→　先頭から順に最適化を試みる
       auto *I = Applies.pop_back_val();
       auto Apply = ApplySite::isa(I);
       assert(Apply && "Expected an apply!");
       SILFunction *Callee = Apply.getReferencedFunctionOrNull();
       assert(Callee && "Expected to have a known callee");
 
+        // dynamicつきは特殊化しない
       if (!Apply.canOptimize() || !Callee->shouldOptimize())
         continue;
+
+        llvm::dbgs() << "specialize: " << swift::Demangle::demangleSymbolAsString(Callee->getName()) << "\n";
 
       // We have a call that can potentially be specialized, so
       // attempt to do so.
@@ -114,11 +135,30 @@ bool GenericSpecializer::specializeAppliesInFunction(SILFunction &F) {
       // Remove all the now-dead applies. We must do this immediately
       // rather than defer it in order to avoid problems with cloning
       // dead instructions when doing recursive specialization.
-      while (!DeadApplies.empty()) {
+      while (!DeadApplies.empty()) { // po DeadApplies.size(); → 1
         auto *AI = DeadApplies.pop_back_val();
 
         // Remove any applies we are deleting so that we don't attempt
         // to specialize them.
+          // 最適化したやつをすぐに消す。
+          // いまこうなってる
+//          sil_scope 1 { loc "generics.swift":6:6 parent @$s8generics1gySbs6UInt16VF : $@convention(thin) (UInt16) -> Bool }
+//          sil_scope 2 { loc "generics.swift":6:29 parent 1 }
+//          // %0                                             // users: %3, %1
+//          bb0(%0 : $UInt16):
+//            debug_value %0 : $UInt16, let, name "v", argno 1 // id: %1
+//            %2 = alloc_stack $UInt16                        // users: %6, %3, %9, %8
+//            store %0 to %2 : $*UInt16                       // id: %3
+//            // function_ref f<A>(_:)
+//            %4 = function_ref @$s8generics1fySbxSQRzlF : $@convention(thin) <τ_0_0 where τ_0_0 : Equatable> (@in_guaranteed τ_0_0) -> Bool // user: %8
+//            // function_ref specialized f<A>(_:)
+//            %5 = function_ref @$s8generics1fySbxSQRzlFs6UInt16V_Tg5 : $@convention(thin) (UInt16) -> Bool // user: %7 // 最適化して生えた特殊化関数。$s8generics1fySbxSQRzlFs6UInt16V_Tg5 ---> generic specialization <Swift.UInt16> of generics.f<A where A: Swift.Equatable>(A) -> Swift.Bool
+//            %6 = load %2 : $*UInt16                         // user: %7
+//            %7 = apply %5(%6) : $@convention(thin) (UInt16) -> Bool // user: %10
+//            %8 = apply %4<UInt16>(%2) : $@convention(thin) <τ_0_0 where τ_0_0 : Equatable> (@in_guaranteed τ_0_0) -> Bool  // ここを消す
+//            dealloc_stack %2 : $*UInt16                     // id: %9
+//            return %7 : $Bool                               // id: %10
+
         Applies.remove(AI);
 
         recursivelyDeleteTriviallyDeadInstructions(AI, true);
@@ -128,7 +168,9 @@ bool GenericSpecializer::specializeAppliesInFunction(SILFunction &F) {
       // If calling the specialization utility resulted in new functions
       // (as opposed to returning a previous specialization), we need to notify
       // the pass manager so that the new functions get optimized.
-      for (SILFunction *NewF : reverse(NewFunctions)) {
+      for (SILFunction *NewF : reverse(NewFunctions)) { // po NewFunctions.size(); → 1
+          // ここのNewFは特殊化済みのf<UInt16>()
+          llvm::dbgs() << "   success: " << swift::Demangle::demangleSymbolAsString(NewF->getName()) << "\n";
         addFunctionToPassManagerWorklist(NewF, Callee);
       }
     }

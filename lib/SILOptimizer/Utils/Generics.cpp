@@ -417,8 +417,7 @@ bool ReabstractionInfo::prepareAndCheck(ApplySite Apply, SILFunction *Callee,
   using namespace OptRemark;
   // We do not support partial specialization.
   if (!EnablePartialSpecialization && CalleeParamSubMap.hasArchetypes()) {
-    LLVM_DEBUG(llvm::dbgs() <<"    Partial specialization is not supported.\n");
-    LLVM_DEBUG(ParamSubs.dump(llvm::dbgs()));
+    llvm::dbgs() <<"    Partial specialization is not supported.\n";
     return false;
   }
 
@@ -428,6 +427,7 @@ bool ReabstractionInfo::prepareAndCheck(ApplySite Apply, SILFunction *Callee,
       return RemarkMissed("DynamicSelf", *Apply.getInstruction())
              << IndentDebug(4) << "Cannot specialize with dynamic self";
     });
+      llvm::dbgs() << "Cannot specialize with dynamic self\n";
     return false;
   }
 
@@ -441,6 +441,7 @@ bool ReabstractionInfo::prepareAndCheck(ApplySite Apply, SILFunction *Callee,
                << IndentDebug(4)
                << "Cannot specialize because the generic type is too deep";
       });
+        llvm::dbgs() << "Cannot specialize because the generic type is too deep\n";
       NumPreventedTooComplexGenericSpecializations++;
       return false;
     }
@@ -488,26 +489,28 @@ bool ReabstractionInfo::prepareAndCheck(ApplySite Apply, SILFunction *Callee,
     // Bail if we cannot specialize generic substitutions, but all substitutions
     // were generic.
     if (!HasConcreteGenericParams && !SupportGenericSubstitutions) {
-      LLVM_DEBUG(llvm::dbgs() << "    Partial specialization is not supported "
-                            "if all substitutions are generic.\n");
-      LLVM_DEBUG(ParamSubs.dump(llvm::dbgs()));
+      llvm::dbgs() << "    Partial specialization is not supported "
+                            "if all substitutions are generic.\n";
       return false;
     }
 
     if (!HasNonArchetypeGenericParams && !HasConcreteGenericParams) {
-      LLVM_DEBUG(llvm::dbgs() << "    Partial specialization is not supported "
-                            "if all substitutions are archetypes.\n");
-      LLVM_DEBUG(ParamSubs.dump(llvm::dbgs()));
+      llvm::dbgs() << "    Partial specialization is not supported "
+                            "if all substitutions are archetypes.\n";
       return false;
     }
 
     // We need a generic environment for the partial specialization.
-    if (!CalleeGenericEnv)
-      return false;
+      if (!CalleeGenericEnv) {
+          llvm::dbgs() << "We need a generic environment for the partial specialization.\n";
+          return false;
+      }
 
     // Bail if the callee should not be partially specialized.
-    if (shouldNotSpecialize(Callee, Apply.getFunction(), ParamSubs))
-      return false;
+      if (shouldNotSpecialize(Callee, Apply.getFunction(), ParamSubs)) {
+          llvm::dbgs() << "Bail if the callee should not be partially specialized.\n";
+          return false;
+      }
   }
 
   // Check if specializing this call site would create in an infinite generic
@@ -523,6 +526,9 @@ bool ReabstractionInfo::prepareAndCheck(ApplySite Apply, SILFunction *Callee,
     });
     if (PrintGenericSpecializationLoops)
       llvm::errs() << "Detected and prevented an infinite "
+                      "generic specialization loop for callee: "
+                   << Callee->getName() << '\n';
+      llvm::dbgs() << "Detected and prevented an infinite "
                       "generic specialization loop for callee: "
                    << Callee->getName() << '\n';
     NumPreventedGenericSpecializationLoops++;
@@ -545,6 +551,7 @@ ReabstractionInfo::ReabstractionInfo(
     : ConvertIndirectToDirect(ConvertIndirectToDirect),
       TargetModule(targetModule), isWholeModule(isWholeModule),
       Serialized(Serialized) {
+          // ここで特殊化可能かどうか検査される
   if (!prepareAndCheck(Apply, Callee, ParamSubs, ORE))
     return;
 
@@ -2410,6 +2417,7 @@ void swift::trySpecializeApplyOfGeneric(
                                          ReInfo);
   SILFunction *SpecializedF = FuncSpecializer.lookupSpecialization();
   if (!SpecializedF) {
+      // ここで特殊化後の関数が作られる。まだ最適化されてないので型パラが埋め込まれただけ
     SpecializedF = FuncSpecializer.tryCreateSpecialization();
     if (!SpecializedF)
       return;
