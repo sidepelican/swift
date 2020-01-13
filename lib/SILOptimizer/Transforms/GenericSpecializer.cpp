@@ -124,6 +124,10 @@ bool GenericSpecializer::specializeAppliesInFunction(SILFunction &F) {
       if (!Apply.canOptimize() || !Callee->shouldOptimize())
         continue;
 
+        llvm::dbgs() << "\n";
+        llvm::dbgs() << "----------------------------------------------------------------------------\n";
+        F.dump();
+        llvm::dbgs() << "\n";
         llvm::dbgs() << "specialize: " << swift::Demangle::demangleSymbolAsString(Callee->getName()) << "\n";
 
       // We have a call that can potentially be specialized, so
