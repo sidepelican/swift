@@ -88,7 +88,7 @@ bool GenericSpecializer::specializeAppliesInFunction(SILFunction &F) {
       // know the called function, and apply instructions where we do
       // not have the body of the called function.
       ApplySite Apply = ApplySite::isa(I);
-      if (!Apply || !Apply.hasSubstitutions())
+      if (!Apply || !Apply.hasSubstitutions()) // 置換対象の型パラがある
         continue;
 
       auto *Callee = Apply.getReferencedFunctionOrNull();
