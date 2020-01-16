@@ -66,20 +66,6 @@ bool GenericSpecializer::specializeAppliesInFunction(SILFunction &F) {
     // can pop them off the end of our vector and process them in
     // forward order.
 
-      // これの場合でのコメント。
-//      sil_scope 1 { loc "generics.swift":6:6 parent @$s8generics1gySbs6UInt16VF : $@convention(thin) (UInt16) -> Bool }
-//      sil_scope 2 { loc "generics.swift":6:29 parent 1 }
-//      // %0                                             // users: %3, %1
-//      bb0(%0 : $UInt16):
-//        debug_value %0 : $UInt16, let, name "v", argno 1 // id: %1
-//        %2 = alloc_stack $UInt16                        // users: %3, %6, %5
-//        store %0 to %2 : $*UInt16                       // id: %3
-//        // function_ref f<A>(_:)
-//        %4 = function_ref @$s8generics1fySbxSQRzlF : $@convention(thin) <τ_0_0 where τ_0_0 : Equatable> (@in_guaranteed τ_0_0) -> Bool // user: %5
-//        %5 = apply %4<UInt16>(%2) : $@convention(thin) <τ_0_0 where τ_0_0 : Equatable> (@in_guaranteed τ_0_0) -> Bool // user: %7
-//        dealloc_stack %2 : $*UInt16                     // id: %6
-//        return %5 : $Bool                               // id: %7
-
     for (auto It = BB.rbegin(), End = BB.rend(); It != End; ++It) {  // あとでイテレータ破壊を避けるために逆順に収集
       auto *I = &*It;
 
@@ -103,8 +89,7 @@ bool GenericSpecializer::specializeAppliesInFunction(SILFunction &F) {
         });
         continue;
       }
-        // 1st: 関数呼び出し（apply）のうち、呼び出し先が参照可能なものに関して収集
-        //  %5 = apply %4<UInt16>(%2) : $@convention(thin) <τ_0_0 where τ_0_0 : Equatable> (@in_guaranteed τ_0_0) -> Bool // user: %7od
+        // 関数呼び出し（apply）のうち、呼び出し先が参照可能なものに関して収集
       Applies.insert(Apply.getInstruction());
     }
 

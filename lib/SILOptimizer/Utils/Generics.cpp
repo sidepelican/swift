@@ -2421,10 +2421,10 @@ void swift::trySpecializeApplyOfGeneric(
     SpecializedF = FuncSpecializer.tryCreateSpecialization();
     if (!SpecializedF)
       return;
-    LLVM_DEBUG(llvm::dbgs() << "Created specialized function: "
-                            << SpecializedF->getName() << "\n"
-                            << "Specialized function type: "
-                            << SpecializedF->getLoweredFunctionType() << "\n");
+    llvm::dbgs() << "Created specialized function: "
+                 << SpecializedF->getName() << "\n"
+                 << "Specialized function type: "
+                 << SpecializedF->getLoweredFunctionType() << "\n";
     assert(!SpecializedF->hasOwnership());
     NewFunctions.push_back(SpecializedF);
   }
